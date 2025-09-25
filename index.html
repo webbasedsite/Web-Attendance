@@ -1,10 +1,101 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Choose Role</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Choose Role - Carrybee Attendance</title>
+  <style>
+    /* Reset & basics */
+    * {
+      box-sizing: border-box;
+      margin: 0; padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body, html {
+      height: 100%;
+      background: #ffffff; /* White background */
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+    }
+
+    header {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 40px;
+      letter-spacing: 2px;
+      color: #2575fc; /* Changed to bright yellow */
+      text-shadow: 0 1px 3px rgba(255, 223, 0, 0.6); /* subtle yellow glow */
+      border-bottom: 2px solid #FFDF00; /* matching yellow border */
+      padding-bottom: 10px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .container {
+      background: #f0f4ff; /* subtle light blue */
+      padding: 30px 40px;
+      border-radius: 15px;
+      box-shadow: 0 8px 24px rgba(37,117,252,0.15);
+      width: 100%;
+      max-width: 360px;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      font-weight: 600;
+      font-size: 1.8rem;
+      color: #2575fc;
+    }
+
+    button {
+      background: #2575fc;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 15px 0;
+      width: 100%;
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 10px 0;
+      cursor: pointer;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 4px 12px rgba(37,117,252,0.5);
+    }
+
+    button:hover {
+      background: #1a54c2;
+      box-shadow: 0 6px 18px rgba(26,84,194,0.8);
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 400px) {
+      .container {
+        padding: 25px 20px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      header {
+        font-size: 2rem;
+      }
+
+      button {
+        font-size: 1rem;
+        padding: 12px 0;
+      }
+    }
+  </style>
 </head>
 <body>
+  <header>Carrybee Attendance</header>
   <div class="container">
     <h1>Select Your Role</h1>
     <button onclick="choose('agent')">Agent</button>
@@ -14,8 +105,12 @@
   <script>
     function choose(role){
       localStorage.setItem('role', role);
-      if(role==='incharge') window.location.href='login.html';
-      else { localStorage.removeItem('employeeId'); window.location.href='attendance.html'; }
+      if(role === 'incharge') {
+        window.location.href = 'login.html';
+      } else {
+        localStorage.removeItem('employeeId');
+        window.location.href = 'attendance.html';
+      }
     }
   </script>
 </body>

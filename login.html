@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Incharge Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <h2>Incharge Login</h2>
+  <input type="text" id="phone" placeholder="Phone Number">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <p id="status"></p>
+</div>
+
+<script>
+const webAppUrl = 'https://script.google.com/macros/s/AKfycbyNtDfAEcl9HypzKXy2NQvAkvJKi9FyvskyqxtjRbTsNcy6LDdDfTpa0GDR12-4NprwDg/exec';
+
+function login(){
+  const phone = document.getElementById('phone').value.trim();
+  const password = document.getElementById('password').value.trim();
+  const status = document.getElementById('status');
+  if(!phone||!password){ status.textContent="Enter phone & password"; return; }
+  status.textContent="Checking...";
+
+  fetch(webAppUrl,{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:`action=login&phone=${encodeURIComponent(phone)}&password=${encodeURIComponent(password)}`
+  }).then(r=>r.json()).then(data=>{
+    if(data.success){
+      localStorage.setItem('phone',phone);
+      localStorage.setItem('role',data.role);
+      window.location.href='attendance.html';
+    }else{ status.textContent=data.message; }
+  }).catch(()=>status.textContent="Login failed");
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Choose Role</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Select Your Role</h1>
+    <button onclick="choose('agent')">Agent</button>
+    <button onclick="choose('incharge')">Incharge</button>
+  </div>
+
+  <script>
+    function choose(role){
+      localStorage.setItem('role', role);
+      if(role==='incharge') window.location.href='login.html';
+      else { localStorage.removeItem('employeeId'); window.location.href='attendance.html'; }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Attendance</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <h2>Attendance</h2>
+  <input type="text" id="employeeId" placeholder="Employee ID">
+  <select id="shift">
+    <option value="">Select Shift</option>
+    <option value="Morning">Morning</option>
+    <option value="Evening">Evening</option>
+    <option value="Night">Night</option>
+  </select>
+  <button onclick="attemptCheckIn()">Check-In</button>
+  <button onclick="attemptCheckOut()">Check-Out</button>
+  <button onclick="fetchHistory()">View History</button>
+  <button id="downloadCSV" onclick="downloadCSV()">Download CSV</button>
+  <button id="logout" onclick="logout()">Logout</button>
+  <p id="status"></p>
+  <div id="history"></div>
+</div>
+
+<script>
+const webAppUrl = 'https://script.google.com/macros/s/AKfycbyNtDfAEcl9HypzKXy2NQvAkvJKi9FyvskyqxtjRbTsNcy6LDdDfTpa0GDR12-4NprwDg/exec';
+const statusEl = document.getElementById('status');
+const historyEl = document.getElementById('history');
+
+window.onload = async ()=>{
+  const role = localStorage.getItem('role')||'agent';
+  const empInput = document.getElementById('employeeId');
+  const storedId = localStorage.getItem('phone')||'';
+  if(role==='agent'){ empInput.value=''; empInput.readOnly=false; document.getElementById('downloadCSV').style.display='none'; }
+  else{ empInput.value=storedId; empInput.readOnly=true; document.getElementById('downloadCSV').style.display='block'; }
+};
+
+function logout(){ localStorage.removeItem('phone'); localStorage.removeItem('role'); window.location.href='index.html'; }
+
+function getDistance(lat1,lon1,lat2,lon2){ const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+
+async function getOfficeLocation(employeeId){
+  const res = await fetch(webAppUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`action=getOfficeLocation&phone=${encodeURIComponent(employeeId)}`});
+  const data = await res.json();
+  if(!data.success) throw new Error(data.message);
+  return {latitude:parseFloat(data.latitude), longitude:parseFloat(data.longitude)};
+}
+
+function sendAttendance(action,employeeId,shift,latitude,longitude){
+  const timestamp=new Date().toISOString();
+  return fetch(webAppUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`action=${action}&phone=${employeeId}&shift=${shift}&latitude=${latitude}&longitude=${longitude}&timestamp=${timestamp}`});
+}
+
+async function attemptAttendance(action){
+  statusEl.style.color='black'; statusEl.textContent='Tracking location...';
+  const employeeId=document.getElementById('employeeId').value.trim();
+  const shift=document.getElementById('shift').value;
+  if(!employeeId||!shift){ statusEl.style.color='red'; statusEl.textContent='Please enter all fields.'; return; }
+
+  try{
+    const officeLoc=await getOfficeLocation(employeeId);
+    if(!navigator.geolocation) throw new Error('Geolocation not supported.');
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const userLat=pos.coords.latitude, userLng=pos.coords.longitude;
+      const distance=getDistance(userLat,userLng,officeLoc.latitude,officeLoc.longitude);
+      if(distance>100){ statusEl.style.color='red'; statusEl.textContent=`Too far from office (${distance.toFixed(1)}m).`; return; }
+      const resp = await sendAttendance(action,employeeId,shift,userLat,userLng);
+      const text = await resp.text();
+      statusEl.style.color='green'; statusEl.textContent=text;
+    },()=>{statusEl.style.color='red'; statusEl.textContent='Location access denied.';},{enableHighAccuracy:true,timeout:10000});
+  }catch(err){ statusEl.style.color='red'; statusEl.textContent=err.message; }
+}
+
+async function attemptCheckIn(){ await attemptAttendance('Check-In'); }
+async function attemptCheckOut(){ await attemptAttendance('Check-Out'); }
+
+async function fetchHistory(){
+  const employeeId=document.getElementById('employeeId').value.trim();
+  if(!employeeId){ statusEl.textContent='Enter Employee ID.'; return; }
+  statusEl.textContent='Fetching history...';
+  try{
+    const res = await fetch(webAppUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`action=getHistory&phone=${encodeURIComponent(employeeId)}`});
+    const data = await res.json();
+    if(!data.success||!data.records) throw new Error(data.message||'No records found.');
+    showHistoryTable(data.records);
+    statusEl.textContent='';
+  }catch(err){ historyEl.style.display='none'; statusEl.textContent=err.message; }
+}
+
+function showHistoryTable(records){
+  historyEl.style.display='block';
+  let html='<table><tr><th>Shift</th><th>Latitude</th><th>Longitude</th><th>Time</th><th>Action</th></tr>';
+  records.forEach(r=>{ html+=`<tr><td>${r.shift}</td><td>${r.latitude}</td><td>${r.longitude}</td><td>${r.timestamp}</td><td>${r.action}</td></tr>`; });
+  html+='</table>'; historyEl.innerHTML=html;
+}
+
+async function downloadCSV(){
+  const employeeId=document.getElementById('employeeId').value.trim();
+  const res = await fetch(webAppUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`action=getHistory&phone=${encodeURIComponent(employeeId)}`});
+  const data = await res.json();
+  if(!data.success) { alert(data.message); return; }
+  const csvRows = [];
+  const headers = Object.keys(data.records[0]);
+  csvRows.push(headers.join(','));
+  for(const row of data.records){ csvRows.push(headers.map(h=>row[h]).join(',')); }
+  const csvData = new Blob([csvRows.join('\n')], {type:'text/csv'});
+  const url = window.URL.createObjectURL(csvData);
+  const a=document.createElement('a'); a.href=url; a.download='attendance.csv'; a.click(); window.URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

@@ -56,10 +56,12 @@
       text-align: left;
       cursor: pointer;
       font-size: 0.9rem;
+      color: white;
     }
 
     .dropdown button:hover {
       background-color: #f0f0f0;
+      color: #2575fc;
     }
 
     .container {
@@ -120,6 +122,7 @@
       margin-top: 12px;
       transition: background-color 0.3s ease;
       box-shadow: 0 6px 18px rgba(37,117,252,0.4);
+      position: relative;
     }
 
     button:hover {
@@ -128,7 +131,6 @@
 
     #message {
       margin-top: 16px;
-      color: #ff0000;
       font-weight: 600;
       min-height: 20px;
     }
@@ -142,6 +144,32 @@
 
     #downloadCSV:hover {
       background-color: #287d28;
+    }
+
+    /* Loader spinner */
+    #loader {
+      border: 4px solid #f3f3f3; /* Light grey */
+      border-top: 4px solid #2575fc; /* Blue */
+      border-radius: 50%;
+      width: 25px;
+      height: 25px;
+      animation: spin 1s linear infinite;
+      display: none;
+      margin: 0 auto;
+      margin-top: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+
+    #infoMessage {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      color: #2575fc;
+      font-weight: 600;
+      min-height: 20px;
     }
   </style>
 </head>
@@ -162,7 +190,7 @@
     <p id="officeName"></p>
 
     <h2>Mark Attendance</h2>
-    <input type="text" id="employeeId" placeholder="Employee Phone or ID" />
+    <input type="text" id="employeeId" placeholder="Employee Phone" />
     <select id="shiftSelect">
       <option value="Morning">Morning</option>
       <option value="Evening">Evening</option>
@@ -170,20 +198,61 @@
     </select>
     <button id="checkInBtn">Check-In</button>
     <button id="checkOutBtn">Check-Out</button>
+
+    <div id="loader"></div>
     <div id="message"></div>
+
     <button id="downloadCSV">Download Agents CSV</button>
+    <div id="infoMessage"></div>
   </div>
 
   <script>
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbyaOOq6z-Az2-RRHzGDLzoofz3fUIki34XZEdknsH9onxsxDHXVKDZAkLuvO9AXRuW3lw/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbw1vpWSJwElOm7jHbhw90O9ggX_o5Csh96uzcqPT0Gs7NOTur_YbLBCroPtDEtyhJ08Og/exec";
 
-    // 🔄 Toggle dropdown menu
+    // Toggle dropdown menu
     function toggleMenu() {
       const menu = document.getElementById('dropdownMenu');
       menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
     }
 
-    // 🧠 Load UI based on role
+    // Show message helper
+    function showMessage(msg, success = false) {
+      const messageEl = document.getElementById('message');
+      messageEl.style.color = success ? 'green' : 'red';
+      messageEl.textContent = msg;
+    }
+
+    // Show info helper
+    function showInfo(msg) {
+      const infoEl = document.getElementById('infoMessage');
+      infoEl.textContent = msg;
+    }
+
+    // Show/hide loader
+    function setLoading(isLoading) {
+      const loader = document.getElementById('loader');
+      loader.style.display = isLoading ? 'block' : 'none';
+    }
+
+    // Validate agent phone against Employees tab
+    async function validateAgentPhone(phone) {
+      if (!phone) return false;
+      try {
+        // Fetch all employees - phone only
+        const params = new URLSearchParams({ action: 'getAllEmployees' });
+        const res = await fetch(webAppUrl + "?" + params.toString(), { method: "POST" });
+        const data = await res.json();
+        if (data.success && data.employees) {
+          return data.employees.some(emp => emp.phone === phone);
+        }
+        return false;
+      } catch (e) {
+        console.error("Failed to validate phone:", e);
+        return false;
+      }
+    }
+
+    // Load UI based on role
     window.onload = async () => {
       const role = localStorage.getItem('role') || 'agent';
       const name = localStorage.getItem('name') || '';
@@ -195,8 +264,14 @@
       document.getElementById('employeeId').readOnly = (role !== 'agent');
 
       // Set welcome text
-      document.getElementById('welcome').textContent = `Welcome ${name}`;
-      document.getElementById('officeName').textContent = `Office: ${hubName}`;
+      window.addEventListener('DOMContentLoaded', () => {
+  const name = localStorage.getItem('name') || 'User';
+  const hubName = localStorage.getItem('hubName') || 'Unknown Office';
+
+  document.getElementById('welcome').textContent = `Welcome ${name}`;
+  document.getElementById('officeName').textContent = `Office: ${hubName}`;
+});
+
 
       // Menu option visibility
       if (role !== 'agent') {
@@ -210,33 +285,41 @@
           const data = await res.json();
           if (data.success && data.agents.length > 0) {
             document.getElementById('downloadCSV').style.display = 'block';
+            showInfo(`You can download the CSV of agents for office "${hubName}".`);
+          } else {
+            showInfo(`No agents available to download for office "${hubName}".`);
           }
         } catch (e) {
           console.error("CSV fetch failed", e);
+          showInfo("Unable to check CSV eligibility.");
         }
       }
     };
-
-    // Show message
-    function showMessage(msg, success = false) {
-      const messageEl = document.getElementById('message');
-      messageEl.style.color = success ? 'green' : 'red';
-      messageEl.textContent = msg;
-    }
 
     document.getElementById('checkInBtn').onclick = () => markAttendance('Check-In');
     document.getElementById('checkOutBtn').onclick = () => markAttendance('Check-Out');
 
     async function markAttendance(action) {
       showMessage('');
+      setLoading(false);
+
       const phone = document.getElementById('employeeId').value.trim();
       const shift = document.getElementById('shiftSelect').value;
 
       if (!phone) return showMessage("Please enter your Employee Phone or ID");
 
+      // Validate phone against Employees tab before proceeding
+      showMessage("Validating phone...");
+      const validPhone = await validateAgentPhone(phone);
+      if (!validPhone) {
+        return showMessage("Invalid Employee Phone or ID. Please check and try again.");
+      }
+
       if (!navigator.geolocation) return showMessage("Geolocation not supported");
 
       showMessage("Getting location...");
+      setLoading(true);
+
       navigator.geolocation.getCurrentPosition(async (position) => {
         const params = new URLSearchParams({
           action: action,
@@ -253,27 +336,43 @@
           showMessage(data.message, data.success);
         } catch (error) {
           showMessage("Error communicating with server");
+        } finally {
+          setLoading(false);
         }
       }, () => {
+        setLoading(false);
         showMessage("Location access denied");
       });
     }
 
-    // 📥 Download CSV
+    // Download CSV with confirmation and office name info
     document.getElementById('downloadCSV').onclick = async () => {
+      showMessage('');
+      showInfo('');
       const officeID = localStorage.getItem('officeID');
+      const hubName = localStorage.getItem('hubName');
+
+      if (!officeID) {
+        alert("Office ID not found.");
+        return;
+      }
+
+      showMessage("Fetching agents...");
       try {
         const res = await fetch(webAppUrl + `?action=getAgentsByOffice&officeID=${encodeURIComponent(officeID)}`, { method: 'POST' });
         const data = await res.json();
 
         if (!data.success || !data.agents.length) {
-          alert("No agents found or failed to fetch");
+          alert(`No agents found or failed to fetch for office "${hubName}".`);
           return;
         }
 
         let csv = "Name,Phone\n";
         data.agents.forEach(agent => {
-          csv += `${agent.name},${agent.phone}\n`;
+          // Escape commas if any
+          const nameSafe = `"${agent.name.replace(/"/g, '""')}"`;
+          const phoneSafe = `"${agent.phone.replace(/"/g, '""')}"`;
+          csv += `${nameSafe},${phoneSafe}\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -281,20 +380,26 @@
         const a = document.createElement('a');
         a.href = url;
         a.download = `agents_office_${officeID}.csv`;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
+
+        showMessage(`CSV downloaded successfully for office "${hubName}".`, true);
+        showInfo(`You downloaded the agents CSV for office "${hubName}".`);
+
       } catch (e) {
         alert("Error downloading CSV");
       }
     };
 
-    // 🔒 Logout
+    // Logout
     document.getElementById('logoutOption').onclick = () => {
       localStorage.clear();
       window.location.href = 'login.html';
     };
 
-    // 📜 View History
+    // View History
     document.getElementById('viewHistoryOption').onclick = async () => {
       const phone = localStorage.getItem('phone');
       if (!phone) return alert("Login required");
